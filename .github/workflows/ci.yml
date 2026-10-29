@@ -1,0 +1,72 @@
+name: AI DevOps Agent CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+
+        env:
+          POSTGRES_DB: homelab
+          POSTGRES_USER: homelab_app
+          POSTGRES_PASSWORD: ci_test_password
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd "pg_isready -U homelab_app -d homelab"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_URL: jdbc:postgresql://127.0.0.1:5432/homelab
+      DB_USERNAME: homelab_app
+      DB_PASSWORD: ci_test_password
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v7
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Check Java and Maven
+        run: |
+          java -version
+          mvn -version
+
+      - name: Build and Test
+        run: mvn -B -ntp clean verify
+
+      - name: Upload Spring Boot JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-devops-agent-jar
+          path: |
+            target/*.jar
+            !target/*.jar.original
+          if-no-files-found: error
+          retention-days: 14
